@@ -1,11 +1,23 @@
 <html>
 <head>
+<style type='text/css'>
+  @font-face
+  {
+      font-family:vg_font;
+      src:url('emulogic.ttf');
+  }
+  body
+  {
+    font-family:vg_font;
+    -webkit-user-select: none;
+  }
+</style>
 <script type='text/javascript' src='linkedlist.js'></script>
 <script type='text/javascript' src='binarytree.js'></script>
 <script type='text/javascript' src='canv.js'></script>
 <script type='text/javascript' src='astar.js'></script>
 <script type='text/javascript'>
-var n = 32;
+var n = 64;
 var width = 2*n;
 var height = n;
 
@@ -14,17 +26,22 @@ c.canvas.style.border = "1px solid black";
 
 var map;
 var ticktime = 100;
-var brushsize = 1;
+var brushsize = 2;
+var fullEnergy = 200;
+var score = 0;
 
 var nodes;
 var whiteBull;
 var pasiphae;
 var step;
+var food;
+var energy;
 
 var blockQueue = new LinkedList("BLOCK_QUEUE");
 var unblockQueue = new LinkedList("UNBLOCK_QUEUE");
 var shouldTick = true;
-var occlude = false;
+var fullscreen = false;
+var occlude = true;
 
 var up    = false;
 var left  = false;
@@ -40,8 +57,10 @@ function doit()
   document.getElementById("stage_container").appendChild(shadow);
 
   nodes = constructGrid(width,height);
+  food = nodes[0][0];
   pasiphae = nodes[0][0];
   whiteBull = nodes[0][0];
+  energy = fullEnergy;
   
   tick();
 };
@@ -51,7 +70,11 @@ var constructGrid = function(width, height)
   //Manhattan distance (cheap + good approximation)
   //var calculateH = function(node, goalNode) { return Math.abs(goalNode.x-node.x)+Math.abs(goalNode.y-node.y); };
   //Euclidean distance (expensive + bad approximation- but looks more 'human');
-  var calculateH = function(node, goalNode) { return Math.floor(Math.sqrt((Math.abs(goalNode.x-node.x)*Math.abs(goalNode.x-node.x))+(Math.abs(goalNode.y-node.y)*Math.abs(goalNode.y-node.y)))); };
+  //var calculateH = function(node, goalNode) { return Math.floor(Math.sqrt((Math.abs(goalNode.x-node.x)*Math.abs(goalNode.x-node.x))+(Math.abs(goalNode.y-node.y)*Math.abs(goalNode.y-node.y)))); };
+  
+  //For those reading this code:
+  //Yes, this isn't admissible. It's hella faster, plus gives the searched path a nice 'whispy' look. Plus, with how dynamic/chaotic the environment is, chances of pasiphae getting stuck between two fake best paths is small.
+  var calculateH = function(node, goalNode) { return 10*Math.floor(Math.sqrt((Math.abs(goalNode.x-node.x)*Math.abs(goalNode.x-node.x))+(Math.abs(goalNode.y-node.y)*Math.abs(goalNode.y-node.y)))); };
 
   var calculateGFromNodeToNode = function(nodeA, g, nodeB) { return g+1; };
   map = new AStarGraph("Test", calculateH, calculateGFromNodeToNode);
@@ -87,10 +110,13 @@ var constructGrid = function(width, height)
 
 function tick()
 {
+  score++;
+  if(energy > (fullEnergy/10)) energy -= 1;
   dequeueBlocks();
   dequeueUnblocks();
   moveTheWhiteBull();
-  while(pasiphae == whiteBull) setRandomEnd();
+  while(food == whiteBull) { energy = fullEnergy; setRandomFood(); }
+  while(pasiphae == whiteBull) { score = 0; setRandomBull(); };
   step = map.getBestStep(pasiphae,whiteBull);
   setClampCoords();
   if(occlude) calculateOcclusions();
@@ -99,71 +125,97 @@ function tick()
   setTimeout(tick, ticktime);
 };
 
+var moved;
 function moveTheWhiteBull()
 {
+  moved = false;
   //Can only move on one axis per turn. So, to make holding up+left not JUST bring you one direction, it alternates which axis takes priority.
   if(movementPriority)
   {
     if(up || down)
     {
-      if(up    && whiteBull.y > 0        && !nodes[whiteBull.x][whiteBull.y-1].block) whiteBull = nodes[whiteBull.x][whiteBull.y-1];
-      if(down  && whiteBull.y < height-1 && !nodes[whiteBull.x][whiteBull.y+1].block) whiteBull = nodes[whiteBull.x][whiteBull.y+1];
+      if(up    && whiteBull.y > 0        && !nodes[whiteBull.x][whiteBull.y-1].block) { whiteBull = nodes[whiteBull.x][whiteBull.y-1]; moved = true; }
+      if(down  && whiteBull.y < height-1 && !nodes[whiteBull.x][whiteBull.y+1].block) { whiteBull = nodes[whiteBull.x][whiteBull.y+1]; moved = true; }
     }
     else
     {
-      if(left  && whiteBull.x > 0        && !nodes[whiteBull.x-1][whiteBull.y].block) whiteBull = nodes[whiteBull.x-1][whiteBull.y];
-      if(right && whiteBull.x < width-1  && !nodes[whiteBull.x+1][whiteBull.y].block) whiteBull = nodes[whiteBull.x+1][whiteBull.y];
+      if(left  && whiteBull.x > 0        && !nodes[whiteBull.x-1][whiteBull.y].block) { whiteBull = nodes[whiteBull.x-1][whiteBull.y]; moved = true; }
+      if(right && whiteBull.x < width-1  && !nodes[whiteBull.x+1][whiteBull.y].block) { whiteBull = nodes[whiteBull.x+1][whiteBull.y]; moved = true; }
     }
   }
   else
   {
     if(left || right)
     {
-      if(left  && whiteBull.x > 0        && !nodes[whiteBull.x-1][whiteBull.y].block) whiteBull = nodes[whiteBull.x-1][whiteBull.y];
-      if(right && whiteBull.x < width-1  && !nodes[whiteBull.x+1][whiteBull.y].block) whiteBull = nodes[whiteBull.x+1][whiteBull.y];
+      if(left  && whiteBull.x > 0        && !nodes[whiteBull.x-1][whiteBull.y].block) { whiteBull = nodes[whiteBull.x-1][whiteBull.y]; moved = true; }
+      if(right && whiteBull.x < width-1  && !nodes[whiteBull.x+1][whiteBull.y].block) { whiteBull = nodes[whiteBull.x+1][whiteBull.y]; moved = true; }
     }
     else
     {
-      if(up    && whiteBull.y > 0        && !nodes[whiteBull.x][whiteBull.y-1].block) whiteBull = nodes[whiteBull.x][whiteBull.y-1];
-      if(down  && whiteBull.y < height-1 && !nodes[whiteBull.x][whiteBull.y+1].block) whiteBull = nodes[whiteBull.x][whiteBull.y+1];
+      if(up    && whiteBull.y > 0        && !nodes[whiteBull.x][whiteBull.y-1].block) { whiteBull = nodes[whiteBull.x][whiteBull.y-1]; moved = true; }
+      if(down  && whiteBull.y < height-1 && !nodes[whiteBull.x][whiteBull.y+1].block) { whiteBull = nodes[whiteBull.x][whiteBull.y+1]; moved = true; }
     }
+  }
+  if(!moved)
+  {
+    if(up    && whiteBull.y > 0        && !nodes[whiteBull.x][whiteBull.y-1].block) { whiteBull = nodes[whiteBull.x][whiteBull.y-1]; moved = true; }
+    if(down  && whiteBull.y < height-1 && !nodes[whiteBull.x][whiteBull.y+1].block) { whiteBull = nodes[whiteBull.x][whiteBull.y+1]; moved = true; }
+    if(left  && whiteBull.x > 0        && !nodes[whiteBull.x-1][whiteBull.y].block) { whiteBull = nodes[whiteBull.x-1][whiteBull.y]; moved = true; }
+    if(right && whiteBull.x < width-1  && !nodes[whiteBull.x+1][whiteBull.y].block) { whiteBull = nodes[whiteBull.x+1][whiteBull.y]; moved = true; }
   }
   movementPriority = !movementPriority;
 };
 
+var displaywidth;
+var displayheight;
 var centerxcoord;
 var centerycoord;
 var minxcoord;
+var maxxcoord;
 var minycoord;
+var maxycoord;
 function setClampCoords()
 {
-  centerxcoord = whiteBull.x;
-  centerycoord = whiteBull.y;
+  if(fullscreen)
+  {
+    displaywidth  = width;
+    displayheight = height;
+    centerxcoord = width/2;
+    centerycoord = height/2;
+  }
+  else
+  {
+    displaywidth  = width/2;
+    displayheight = height/2;
+    centerxcoord = whiteBull.x;
+    centerycoord = whiteBull.y;
   
-  if(centerxcoord - (width/4) < 0)            centerxcoord = width/4;
-  else if(centerxcoord + (width/4) > width)   centerxcoord = width-(width/4);
-  if(centerycoord - (height/4) < 0)           centerycoord = height/4;
-  else if(centerycoord + (height/4) > height) centerycoord = height-(height/4);
-  
-  minxcoord = centerxcoord-(width/4);
-  minycoord = centerycoord-(height/4);
+    if     (centerxcoord - (displaywidth/2) < 0)       centerxcoord = displaywidth/2;
+    else if(centerxcoord + (displaywidth/2) > width)   centerxcoord = width-(displaywidth/2);
+    if     (centerycoord - (displayheight/2) < 0)      centerycoord = displayheight/2;
+    else if(centerycoord + (displayheight/2) > height) centerycoord = height-(displayheight/2);
+  }
+  minxcoord = centerxcoord-(displaywidth/2);
+  maxxcoord = minxcoord+displaywidth;
+  minycoord = centerycoord-(displayheight/2);
+  maxycoord = minycoord+displayheight;
 }
 
 function calculateOcclusions()
 {
-  for(var i = minxcoord; i < minxcoord+(width/2); i++)
-    for(var j = minycoord; j < minycoord+(height/2); j++)
+  for(var i = minxcoord; i < maxxcoord; i++)
+    for(var j = minycoord; j < maxycoord; j++)
       nodes[i][j].occluded = false;
   
-  for(var i = minxcoord; i < minxcoord+(width/2); i++)
+  for(var i = minxcoord; i < maxxcoord; i++)
     calculateOcclusionsTo(nodes[i][minycoord]);
-  for(var i = minxcoord; i < minxcoord+(width/2); i++)
-    calculateOcclusionsTo(nodes[i][minycoord+(height/2)-1]);
+  for(var i = minxcoord; i < maxxcoord; i++)
+    calculateOcclusionsTo(nodes[i][maxycoord-1]);
     
-  for(var j = minycoord; j < minycoord+(height/2); j++)
+  for(var j = minycoord; j < maxycoord; j++)
     calculateOcclusionsTo(nodes[minxcoord][j]);
-  for(var j = minycoord; j < minycoord+(height/2); j++)
-    calculateOcclusionsTo(nodes[minxcoord+(width/2)-1][j]);
+  for(var j = minycoord; j < maxycoord; j++)
+    calculateOcclusionsTo(nodes[maxxcoord-1][j]);
 };
 
 var foundblock;
@@ -187,7 +239,7 @@ function calculateOcclusionsTo(node)
       for(j = whiteBull.y+1; j <= node.y; j++)
       {
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     else
@@ -195,7 +247,7 @@ function calculateOcclusionsTo(node)
       for(j = whiteBull.y-1; j >= node.y; j--)
       {
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
   }
@@ -207,7 +259,7 @@ function calculateOcclusionsTo(node)
       for(i = whiteBull.x+1; i <= node.x; i++)
       {
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     else
@@ -215,7 +267,7 @@ function calculateOcclusionsTo(node)
       for(i = whiteBull.x-1; i >= node.x; i--)
       {
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
   }
@@ -236,7 +288,7 @@ function calculateOcclusionsTo(node)
       {
         i = Math.round(whiteBull.x+((j-whiteBull.y)*slope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //2nd octant: right-bottom
@@ -246,7 +298,7 @@ function calculateOcclusionsTo(node)
       {
         j = Math.round(whiteBull.y+((i-whiteBull.x)*islope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //3rd octant: right-top
@@ -256,7 +308,7 @@ function calculateOcclusionsTo(node)
       {
         j = Math.round(whiteBull.y+((i-whiteBull.x)*islope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //4th octant: top-right
@@ -266,7 +318,7 @@ function calculateOcclusionsTo(node)
       {
         i = Math.round(whiteBull.x+((j-whiteBull.y)*slope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //5th octant: top-left
@@ -276,7 +328,7 @@ function calculateOcclusionsTo(node)
       {
         i = Math.round(whiteBull.x+((j-whiteBull.y)*slope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //6th octant: left-top
@@ -286,7 +338,7 @@ function calculateOcclusionsTo(node)
       {
         j = Math.round(whiteBull.y+((i-whiteBull.x)*islope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //7th octant: left-bottom
@@ -296,7 +348,7 @@ function calculateOcclusionsTo(node)
       {
         j = Math.round(whiteBull.y+((i-whiteBull.x)*islope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
     //8th octant: bottom-left
@@ -306,7 +358,7 @@ function calculateOcclusionsTo(node)
       {
         i = Math.round(whiteBull.x+((j-whiteBull.y)*slope));
         if(foundblock) nodes[i][j].occluded = true;
-        else if(nodes[i][j].block) foundblock = true;
+        else if(nodes[i][j].block || nodes[i][j].occluded) foundblock = true;
       }
     }
   }
@@ -316,40 +368,56 @@ var r;
 var g;
 var b;
 var brightness;
+var bloodCreep;
+var blood;
 function draw()
 {
-  for(var i = minxcoord; i < minxcoord+(width/2); i++)
+  bloodCreep = 1/whiteBull.ASTAR_STATE_g_ness;
+  for(var i = minxcoord; i < maxxcoord; i++)
   {
 
-    for(var j = minycoord; j < minycoord+(height/2); j++)
+    for(var j = minycoord; j < maxycoord; j++)
     {
       r = 50+(5*nodes[i][j].r); 
       g = 50+(5*nodes[i][j].r);
       b = 50+(5*nodes[i][j].r);
-      if(nodes[i][j].occluded) brightness = 0;
+      if(nodes[i][j].occluded && !nodes[i][j].block) brightness = 0;
       else
       {
-        brightness = 1-(Math.sqrt(((i-whiteBull.x)*(i-whiteBull.x))+((j-whiteBull.y)*(j-whiteBull.y)))/(height/2));
+        brightness = (energy/fullEnergy)*(1-(Math.sqrt(((i-whiteBull.x)*(i-whiteBull.x))+((j-whiteBull.y)*(j-whiteBull.y)))/(displayheight)));
         if(brightness < 0) brightness = 0;
       }
+      blood = bloodCreep *  2 * (Math.sqrt(((i-minxcoord-(displaywidth/2))*(i-minxcoord-(displaywidth/2)))+((j-minycoord-(displayheight/2))*(j-minycoord-(displayheight/2)))));
       
       //COLOR
-      if(nodes[i][j] == whiteBull)     { r = 255; g = 255; b = 255; }
-      else if(nodes[i][j] == pasiphae) { r = 255; g = 100; b = 100; }
+      if(nodes[i][j] == whiteBull)     { r = 255; g = 255; b = 255; brightness= 1; }
+      else if(nodes[i][j] == pasiphae) { r = 255; g = 200; b = 200; }
+      else if(nodes[i][j] == food)     { r = 200; g = 200; b = 255; }
       else if(nodes[i][j].block)       { r = 240; g = 240; b = 240; }
       else 
       {
         if(nodes[i][j].ASTAR_STATE_ispath) { r = 150; }
-        if(nodes[i][j].ASTAR_STATE_closed || nodes[i][j].ASTAR_STATE_opened) { r = 255-Math.floor(255*(nodes[i][j].ASTAR_STATE_g_ness/height)); g = 200; }
+        if(nodes[i][j].ASTAR_STATE_opened) { r = 255-Math.floor(255*(nodes[i][j].ASTAR_STATE_g_ness/height)); }
       }
       
-      c.context.fillStyle = "rgba("+Math.floor(r*brightness)+","+Math.floor(g*brightness)+","+Math.floor(b*brightness)+",1)";
-      c.context.fillRect(((i-minxcoord)/(width/2))*c.canvas.width,((j-minycoord)/(height/2))*c.canvas.height,c.canvas.width/(width/2),c.canvas.height/(height/2));
+      c.context.fillStyle = "rgba("+Math.floor(r*brightness+blood)+","+Math.floor(g*brightness)+","+Math.floor(b*brightness)+",1)";
+      c.context.fillRect(((i-minxcoord)/displaywidth)*c.canvas.width,((j-minycoord)/displayheight)*c.canvas.height,c.canvas.width/displaywidth,c.canvas.height/displayheight);
     }
   }
+  c.context.strokeStyle = "#8899AA";
+  c.context.lineWidth = 3;
+  c.context.beginPath();
+  c.context.moveTo(((whiteBull.x-minxcoord)/displaywidth)*c.canvas.width+(c.canvas.width/displaywidth/2),((whiteBull.y-minycoord)/displayheight)*c.canvas.height+(c.canvas.height/displayheight/2));
+  c.context.lineTo(((food.x-minxcoord)/displaywidth)*c.canvas.width+(c.canvas.width/displaywidth/2),((food.y-minycoord)/displayheight)*c.canvas.height+(c.canvas.height/displayheight/2));
+  c.context.stroke();
+
+  c.context.fillStyle = "#FFFFFF";
+  c.context.textAlign = 'left';
+  c.context.font = "12px vg_font";
+  c.context.fillText(score, c.canvas.width/displaywidth, c.canvas.height-(c.canvas.height/displayheight));
 };
 
-function setRandomEnd()
+function setRandomBull()
 {
   rx = Math.floor(Math.random()*width);
   ry = Math.floor(Math.random()*height);
@@ -360,6 +428,19 @@ function setRandomEnd()
   }
 
   whiteBull = nodes[rx][ry];
+};
+
+function setRandomFood()
+{
+  rx = Math.floor(Math.random()*width);
+  ry = Math.floor(Math.random()*height);
+  while(nodes[rx][ry].block == true)
+  {
+    rx = Math.floor(Math.random()*width);
+    ry = Math.floor(Math.random()*height);
+  }
+
+  food = nodes[rx][ry];
 };
 
 // WALL INPUT HANDLING
@@ -421,8 +502,8 @@ function dequeueBlocks()
   var pt;
   while(pt = blockQueue.firstMember())
   {
-    var x = Math.floor((pt.x/c.canvas.width)*(width/2))+minxcoord;
-    var y = Math.floor((pt.y/c.canvas.height)*(height/2))+minycoord;
+    var x = Math.floor((pt.x/c.canvas.width)*displaywidth)+minxcoord;
+    var y = Math.floor((pt.y/c.canvas.height)*displayheight)+minycoord;
     blockNode(x,y);
     if(brushsize > 1)
     {
@@ -455,8 +536,8 @@ function dequeueUnblocks()
   var pt;
   while(pt = unblockQueue.firstMember())
   {
-    var x = Math.floor((pt.x/c.canvas.width)*(width/2))+minxcoord;
-    var y = Math.floor((pt.y/c.canvas.height)*(height/2))+minycoord;
+    var x = Math.floor((pt.x/c.canvas.width)*displaywidth)+minxcoord;
+    var y = Math.floor((pt.y/c.canvas.height)*displayheight)+minycoord;
     unblockNode(x,y);
     if(brushsize > 1)
     {
@@ -486,10 +567,6 @@ function downKey(e)
       break;
     case 32: //space
       shouldTick = !shouldTick;
-      break;
-    case 66: //b
-      if(brushsize == 1) brushsize = 2;
-      else if(brushsize == 2) brushsize = 1;
       break;
   }
 };
@@ -521,7 +598,7 @@ document.addEventListener('keyup', upKey, false);
 window.addEventListener('load',doit,false);
 </script>
 </head>
-<body style="height:100%; overflow:hidden; background-color:#111111;"> <!-- Stops scrolling -->
+<body style="height:100%; overflow:hidden; background-color:#222222;"> <!-- Stops scrolling -->
   <div id='stage_container' style="display:block; margin:50px auto; height:320px; width:640px;"  ></div>
   </div>
 </body>
