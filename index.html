@@ -40,7 +40,7 @@ var energy;
 var blockQueue = new LinkedList("BLOCK_QUEUE");
 var unblockQueue = new LinkedList("UNBLOCK_QUEUE");
 var shouldTick = true;
-var fullscreen = false;
+var fullscreen = true;
 var occlude = true;
 
 var up    = false;
@@ -114,9 +114,9 @@ function tick()
   if(energy > (fullEnergy/10)) energy -= 1;
   dequeueBlocks();
   dequeueUnblocks();
-  moveTheWhiteBull();
   while(food == whiteBull) { energy = fullEnergy; setRandomFood(); }
-  while(pasiphae == whiteBull) { score = 0; setRandomBull(); };
+  while(pasiphae == whiteBull) { score = 0; whiteBull = food; };
+  moveTheWhiteBull();
   step = map.getBestStep(pasiphae,whiteBull);
   setClampCoords();
   if(occlude) calculateOcclusions();
@@ -390,9 +390,9 @@ function draw()
       blood = bloodCreep *  2 * (Math.sqrt(((i-minxcoord-(displaywidth/2))*(i-minxcoord-(displaywidth/2)))+((j-minycoord-(displayheight/2))*(j-minycoord-(displayheight/2)))));
       
       //COLOR
-      if(nodes[i][j] == whiteBull)     { r = 255; g = 255; b = 255; brightness= 1; }
+      if(nodes[i][j] == whiteBull)     { r = 255; g = 255; b = 255; brightness = 1; }
       else if(nodes[i][j] == pasiphae) { r = 255; g = 200; b = 200; }
-      else if(nodes[i][j] == food)     { r = 200; g = 200; b = 255; }
+      else if(nodes[i][j] == food)     { r = 200; g = 200; b = 255; brightness = 1; }
       else if(nodes[i][j].block)       { r = 240; g = 240; b = 240; }
       else 
       {
@@ -404,30 +404,19 @@ function draw()
       c.context.fillRect(((i-minxcoord)/displaywidth)*c.canvas.width,((j-minycoord)/displayheight)*c.canvas.height,c.canvas.width/displaywidth,c.canvas.height/displayheight);
     }
   }
+  /*
   c.context.strokeStyle = "#8899AA";
   c.context.lineWidth = 3;
   c.context.beginPath();
   c.context.moveTo(((whiteBull.x-minxcoord)/displaywidth)*c.canvas.width+(c.canvas.width/displaywidth/2),((whiteBull.y-minycoord)/displayheight)*c.canvas.height+(c.canvas.height/displayheight/2));
   c.context.lineTo(((food.x-minxcoord)/displaywidth)*c.canvas.width+(c.canvas.width/displaywidth/2),((food.y-minycoord)/displayheight)*c.canvas.height+(c.canvas.height/displayheight/2));
   c.context.stroke();
+  */
 
   c.context.fillStyle = "#FFFFFF";
   c.context.textAlign = 'left';
   c.context.font = "12px vg_font";
   c.context.fillText(score, c.canvas.width/displaywidth, c.canvas.height-(c.canvas.height/displayheight));
-};
-
-function setRandomBull()
-{
-  rx = Math.floor(Math.random()*width);
-  ry = Math.floor(Math.random()*height);
-  while(nodes[rx][ry].block == true)
-  {
-    rx = Math.floor(Math.random()*width);
-    ry = Math.floor(Math.random()*height);
-  }
-
-  whiteBull = nodes[rx][ry];
 };
 
 function setRandomFood()
