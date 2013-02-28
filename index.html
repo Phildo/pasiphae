@@ -17,7 +17,7 @@
 <script type='text/javascript' src='canv.js'></script>
 <script type='text/javascript' src='astar.js'></script>
 <script type='text/javascript'>
-var n = 64;
+var n = 32;
 var width = 2*n;
 var height = n;
 
@@ -26,7 +26,6 @@ c.canvas.style.border = "1px solid black";
 
 var map;
 var ticktime = 100;
-var brushsize = 2;
 var fullEnergy = 200;
 var score = 0;
 
@@ -37,10 +36,9 @@ var step;
 var food;
 var energy;
 
+var blocks = new LinkedList("BLOCKS");
 var blockQueue = new LinkedList("BLOCK_QUEUE");
 var unblockQueue = new LinkedList("UNBLOCK_QUEUE");
-var shouldTick = true;
-var fullscreen = true;
 var occlude = true;
 
 var up    = false;
@@ -108,6 +106,22 @@ var constructGrid = function(width, height)
   return pos;
 };
 
+function destroyRandomBlocks()
+{
+  var i = blocks.getIterator();
+  var na;
+  var nb;
+  nb = i.next();
+  while(nb)
+  {
+    na = nb;
+    nb = i.next();
+    if(Math.random() > 0.5) unblockNode(na);
+  }
+  shake = 10;
+};
+
+var noprevstep;
 function tick()
 {
   score++;
@@ -116,12 +130,22 @@ function tick()
   dequeueUnblocks();
   while(food == whiteBull) { energy = fullEnergy; setRandomFood(); }
   while(pasiphae == whiteBull) { score = 0; whiteBull = food; };
+  while(food == whiteBull) { energy = fullEnergy; setRandomFood(); }
   moveTheWhiteBull();
   step = map.getBestStep(pasiphae,whiteBull);
-  setClampCoords();
   if(occlude) calculateOcclusions();
   draw();
-  if(shouldTick && step) pasiphae = step;
+  if(step)
+  {
+    pasiphae = step;
+    noprevstep = false;
+  }
+  else
+  {
+    if(noprevstep == true)
+      destroyRandomBlocks();
+    noprevstep = true;
+  }
   setTimeout(tick, ticktime);
 };
 
@@ -166,56 +190,21 @@ function moveTheWhiteBull()
   movementPriority = !movementPriority;
 };
 
-var displaywidth;
-var displayheight;
-var centerxcoord;
-var centerycoord;
-var minxcoord;
-var maxxcoord;
-var minycoord;
-var maxycoord;
-function setClampCoords()
-{
-  if(fullscreen)
-  {
-    displaywidth  = width;
-    displayheight = height;
-    centerxcoord = width/2;
-    centerycoord = height/2;
-  }
-  else
-  {
-    displaywidth  = width/2;
-    displayheight = height/2;
-    centerxcoord = whiteBull.x;
-    centerycoord = whiteBull.y;
-  
-    if     (centerxcoord - (displaywidth/2) < 0)       centerxcoord = displaywidth/2;
-    else if(centerxcoord + (displaywidth/2) > width)   centerxcoord = width-(displaywidth/2);
-    if     (centerycoord - (displayheight/2) < 0)      centerycoord = displayheight/2;
-    else if(centerycoord + (displayheight/2) > height) centerycoord = height-(displayheight/2);
-  }
-  minxcoord = centerxcoord-(displaywidth/2);
-  maxxcoord = minxcoord+displaywidth;
-  minycoord = centerycoord-(displayheight/2);
-  maxycoord = minycoord+displayheight;
-}
-
 function calculateOcclusions()
 {
-  for(var i = minxcoord; i < maxxcoord; i++)
-    for(var j = minycoord; j < maxycoord; j++)
+  for(var i = 0; i < width; i++)
+    for(var j = 0; j < height; j++)
       nodes[i][j].occluded = false;
   
-  for(var i = minxcoord; i < maxxcoord; i++)
-    calculateOcclusionsTo(nodes[i][minycoord]);
-  for(var i = minxcoord; i < maxxcoord; i++)
-    calculateOcclusionsTo(nodes[i][maxycoord-1]);
+  for(var i = 0; i < width; i++)
+    calculateOcclusionsTo(nodes[i][0]);
+  for(var i = 0; i < width; i++)
+    calculateOcclusionsTo(nodes[i][height-1]);
     
-  for(var j = minycoord; j < maxycoord; j++)
-    calculateOcclusionsTo(nodes[minxcoord][j]);
-  for(var j = minycoord; j < maxycoord; j++)
-    calculateOcclusionsTo(nodes[maxxcoord-1][j]);
+  for(var j = 0; j < height; j++)
+    calculateOcclusionsTo(nodes[0][j]);
+  for(var j = 0; j < height; j++)
+    calculateOcclusionsTo(nodes[width-1][j]);
 };
 
 var foundblock;
@@ -370,13 +359,28 @@ var b;
 var brightness;
 var bloodCreep;
 var blood;
+var shake;
+var shakex;
+var shakey;
 function draw()
 {
+  if(shake > 0)
+  {
+    shakex = (Math.random()*shake)-(shake/2);
+    shakey = (Math.random()*shake)-(shake/2);
+  }
+  else
+  { 
+    shakex = 0;
+    shakey = 0;
+  }
+  shake -= 1;
+  
   bloodCreep = 1/whiteBull.ASTAR_STATE_g_ness;
-  for(var i = minxcoord; i < maxxcoord; i++)
+  for(var i = 0; i < width; i++)
   {
 
-    for(var j = minycoord; j < maxycoord; j++)
+    for(var j = 0; j < height; j++)
     {
       r = 50+(5*nodes[i][j].r); 
       g = 50+(5*nodes[i][j].r);
@@ -384,10 +388,10 @@ function draw()
       if(nodes[i][j].occluded && !nodes[i][j].block) brightness = 0;
       else
       {
-        brightness = (energy/fullEnergy)*(1-(Math.sqrt(((i-whiteBull.x)*(i-whiteBull.x))+((j-whiteBull.y)*(j-whiteBull.y)))/(displayheight)));
+        brightness = (energy/fullEnergy)*(1-(Math.sqrt(((i-whiteBull.x)*(i-whiteBull.x))+((j-whiteBull.y)*(j-whiteBull.y)))/(height)));
         if(brightness < 0) brightness = 0;
       }
-      blood = bloodCreep *  2 * (Math.sqrt(((i-minxcoord-(displaywidth/2))*(i-minxcoord-(displaywidth/2)))+((j-minycoord-(displayheight/2))*(j-minycoord-(displayheight/2)))));
+      blood = bloodCreep *  2 * (Math.sqrt(((i-(width/2))*(i-(width/2)))+((j-(height/2))*(j-(height/2)))));
       
       //COLOR
       if(nodes[i][j] == whiteBull)     { r = 255; g = 255; b = 255; brightness = 1; }
@@ -401,22 +405,14 @@ function draw()
       }
       
       c.context.fillStyle = "rgba("+Math.floor(r*brightness+blood)+","+Math.floor(g*brightness)+","+Math.floor(b*brightness)+",1)";
-      c.context.fillRect(((i-minxcoord)/displaywidth)*c.canvas.width,((j-minycoord)/displayheight)*c.canvas.height,c.canvas.width/displaywidth,c.canvas.height/displayheight);
+      c.context.fillRect(((i)/width)*c.canvas.width+shakex,((j)/height)*c.canvas.height+shakey,c.canvas.width/width,c.canvas.height/height);
     }
   }
-  /*
-  c.context.strokeStyle = "#8899AA";
-  c.context.lineWidth = 3;
-  c.context.beginPath();
-  c.context.moveTo(((whiteBull.x-minxcoord)/displaywidth)*c.canvas.width+(c.canvas.width/displaywidth/2),((whiteBull.y-minycoord)/displayheight)*c.canvas.height+(c.canvas.height/displayheight/2));
-  c.context.lineTo(((food.x-minxcoord)/displaywidth)*c.canvas.width+(c.canvas.width/displaywidth/2),((food.y-minycoord)/displayheight)*c.canvas.height+(c.canvas.height/displayheight/2));
-  c.context.stroke();
-  */
 
   c.context.fillStyle = "#FFFFFF";
   c.context.textAlign = 'left';
   c.context.font = "12px vg_font";
-  c.context.fillText(score, c.canvas.width/displaywidth, c.canvas.height-(c.canvas.height/displayheight));
+  c.context.fillText(score, c.canvas.width/width, c.canvas.height-(c.canvas.height/height));
 };
 
 function setRandomFood()
@@ -446,44 +442,40 @@ function addToUnblockQueue(e)
 
 function recordClicks(e)
 {
-  if(!e.shiftKey)
+  if(e.which == 1)
   {
     window.addEventListener('mousemove', addToBlockQueue, false);
     addToBlockQueue(e);
   }
-  else if(e.shiftKey)
+  else if(e.which == 3)
   {
     window.addEventListener('mousemove', addToUnblockQueue, false);
     addToUnblockQueue(e);
-    e.stopPropagation();
   }
 };
 
 function stopRecordingClicks(e)
 {
-  if(!e.shiftKey)
+  if(e.which == 1)
     window.removeEventListener('mousemove', addToBlockQueue, false);
-  else if(e.shiftKey)
-  {
+  else if(e.which == 3)
     window.removeEventListener('mousemove', addToUnblockQueue, false);
-    e.stopPropagation();
-  }
 };
 
-function blockNode(x,y)
+function blockNode(node)
 {
-  if(!(x >= 0 && x < width && y >= 0 && y < height && 
-    nodes[x][y] != pasiphae && nodes[x][y] != whiteBull &&
-    !nodes[x][y].block)) return;
-  if(x-1 >= 0)
-    map.disconnectNodeToNode(nodes[x-1][y],nodes[x][y]);
-  if(x+1 < width)
-    map.disconnectNodeToNode(nodes[x+1][y],nodes[x][y]);
-  if(y-1 >= 0)
-    map.disconnectNodeToNode(nodes[x][y-1],nodes[x][y]);
-  if(y+1 < height)
-    map.disconnectNodeToNode(nodes[x][y+1],nodes[x][y]);
-  nodes[x][y].block = true;
+  if(!(node != pasiphae && node != whiteBull && node != food && !node.block)) return;
+  
+  if(node.x-1 >= 0)
+    map.disconnectNodeToNode(nodes[node.x-1][node.y],node);
+  if(node.x+1 < width)
+    map.disconnectNodeToNode(nodes[node.x+1][node.y],node);
+  if(node.y-1 >= 0)
+    map.disconnectNodeToNode(nodes[node.x][node.y-1],node);
+  if(node.y+1 < height)
+    map.disconnectNodeToNode(nodes[node.x][node.y+1],node);
+  node.block = true;
+  blocks.add(node);
 };
 
 function dequeueBlocks()
@@ -491,33 +483,34 @@ function dequeueBlocks()
   var pt;
   while(pt = blockQueue.firstMember())
   {
-    var x = Math.floor((pt.x/c.canvas.width)*displaywidth)+minxcoord;
-    var y = Math.floor((pt.y/c.canvas.height)*displayheight)+minycoord;
-    blockNode(x,y);
-    if(brushsize > 1)
+    var x = Math.floor((pt.x/c.canvas.width)*width);
+    var y = Math.floor((pt.y/c.canvas.height)*height);
+    if(x >= 0 && x < width && y >= 0 && y < height)
     {
-      blockNode(x-1,y);
-      blockNode(x,y-1);
-      blockNode(x-1,y-1);
+      blockNode(nodes[x][y]);
+      if(x > 0)          blockNode(nodes[x-1][y]);
+      if(y > 0)          blockNode(nodes[x][y-1]);
+      if(x > 0 && y > 0) blockNode(nodes[x-1][y-1]);
     }
     blockQueue.remove(pt);
   }
 };
 
-function unblockNode(x,y)
+function unblockNode(node)
 {
-  if(!(x >= 0 && x < width && y >= 0 && y < height && 
-    nodes[x][y] != pasiphae && nodes[x][y] != whiteBull &&
-    nodes[x][y].block)) return;
-  if(x-1 >= 0)
-    map.connectNodeToNode(nodes[x-1][y],nodes[x][y]);
-  if(x+1 < width)
-    map.connectNodeToNode(nodes[x+1][y],nodes[x][y]);
-  if(y-1 >= 0)
-    map.connectNodeToNode(nodes[x][y-1],nodes[x][y]);
-  if(y+1 < height)
-    map.connectNodeToNode(nodes[x][y+1],nodes[x][y]);
-  nodes[x][y].block = false;
+  console.log(node);
+  if(!node.block) return;
+  
+  if(node.x-1 >= 0)
+    map.connectNodeToNode(nodes[node.x-1][node.y],node);
+  if(node.x+1 < width)
+    map.connectNodeToNode(nodes[node.x+1][node.y],node);
+  if(node.y-1 >= 0)
+    map.connectNodeToNode(nodes[node.x][node.y-1],node);
+  if(node.y+1 < height)
+    map.connectNodeToNode(nodes[node.x][node.y+1],node);
+  node.block = false;
+  blocks.remove(node);
 };
 
 function dequeueUnblocks()
@@ -525,14 +518,14 @@ function dequeueUnblocks()
   var pt;
   while(pt = unblockQueue.firstMember())
   {
-    var x = Math.floor((pt.x/c.canvas.width)*displaywidth)+minxcoord;
-    var y = Math.floor((pt.y/c.canvas.height)*displayheight)+minycoord;
-    unblockNode(x,y);
-    if(brushsize > 1)
+    var x = Math.floor((pt.x/c.canvas.width)*width);
+    var y = Math.floor((pt.y/c.canvas.height)*height);
+    if(x >= 0 && x < width && y >= 0 && y < height)
     {
-      unblockNode(x-1,y);
-      unblockNode(x,y-1);
-      unblockNode(x-1,y-1);
+      unblockNode(nodes[x][y]);
+      if(x > 0)          unblockNode(nodes[x-1][y]);
+      if(y > 0)          unblockNode(nodes[x][y-1]);
+      if(x > 0 && y > 0) unblockNode(nodes[x-1][y-1]);
     }
     unblockQueue.remove(pt);
   }
@@ -553,9 +546,6 @@ function downKey(e)
       break;
     case 68: //d
       right = true;
-      break;
-    case 32: //space
-      shouldTick = !shouldTick;
       break;
   }
 };
@@ -587,7 +577,7 @@ document.addEventListener('keyup', upKey, false);
 window.addEventListener('load',doit,false);
 </script>
 </head>
-<body style="height:100%; overflow:hidden; background-color:#222222;"> <!-- Stops scrolling -->
+<body style="height:100%; overflow:hidden; background-color:#222222;" oncontextmenu="return false"> <!-- Stops scrolling -->
   <div id='stage_container' style="display:block; margin:50px auto; height:320px; width:640px;"  ></div>
   </div>
 </body>
