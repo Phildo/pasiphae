@@ -1,3 +1,10 @@
+<!--
+
+TO THOSE READING THIS CODE:
+
+I apologize. This game was the result of an experiment. I acknowledge that the code structure blows. Please don't judge me. 
+
+-->
 <html>
 <head>
 <style type='text/css'>
@@ -46,6 +53,7 @@ var left  = false;
 var down  = false;
 var right = false;
 var movementPriority = true;
+var paused = true;
 
 function doit()
 {
@@ -60,7 +68,30 @@ function doit()
   whiteBull = nodes[0][0];
   energy = fullEnergy;
   
-  tick();
+  fakeLoad();
+};
+
+//Lay off me- Javascript can't detect the loading of a CSS font, so I arbitrarily give it a couple seconds. 
+var fakeLoad = function()
+{
+  c.context.fillStyle = "#000000";
+  c.context.fillRect(0,0,c.canvas.width,c.canvas.height);
+  c.context.font = "20px vg_font";
+  c.context.fillText(".",0,0);
+  
+  c.context.fillStyle = "#FFFFFF";
+  incrementLoad(0);
+};
+
+var incrementLoad = function(to)
+{
+  if(to >= 1)
+    tick();
+  else
+  {
+    c.context.fillRect(100,(c.canvas.height/2)-2,(c.canvas.width-200)*to,4);
+    setTimeout(function(){incrementLoad(to+0.01);}, ticktime/10);
+  };
 };
 
 var constructGrid = function(width, height)
@@ -124,12 +155,11 @@ function destroyRandomBlocks()
 var noprevstep;
 function tick()
 {
-  score++;
   if(energy > (fullEnergy/10)) energy -= 1;
   dequeueBlocks();
   dequeueUnblocks();
   while(food == whiteBull) { energy = fullEnergy; setRandomFood(); }
-  while(pasiphae == whiteBull) { score = 0; whiteBull = food; };
+  while(pasiphae == whiteBull) { paused = true; whiteBull = food; };
   while(food == whiteBull) { energy = fullEnergy; setRandomFood(); }
   moveTheWhiteBull();
   step = map.getBestStep(pasiphae,whiteBull);
@@ -146,7 +176,8 @@ function tick()
       destroyRandomBlocks();
     noprevstep = true;
   }
-  setTimeout(tick, ticktime);
+  score++;
+  if(!paused) setTimeout(tick, ticktime);
 };
 
 var moved;
@@ -413,6 +444,17 @@ function draw()
   c.context.textAlign = 'left';
   c.context.font = "12px vg_font";
   c.context.fillText(score, c.canvas.width/width, c.canvas.height-(c.canvas.height/height));
+  
+  if(paused)
+  {
+    c.context.fillStyle = "rgba(0,0,0,0.5)";
+    c.context.fillRect(0,0,c.canvas.width,c.canvas.height);
+    c.context.fillStyle = "#FFFFFF";
+    c.context.textAlign = "center";
+    c.context.font = "20px vg_font";
+    c.context.fillText("click to play", c.canvas.width/2, 150);
+    c.context.fillText("score: "+score, c.canvas.width/2, 190);
+  }
 };
 
 function setRandomFood()
@@ -452,6 +494,8 @@ function recordClicks(e)
     window.addEventListener('mousemove', addToUnblockQueue, false);
     addToUnblockQueue(e);
   }
+  if(paused) { score = 0; setTimeout(tick, ticktime); }
+  paused = false;
 };
 
 function stopRecordingClicks(e)
@@ -498,7 +542,6 @@ function dequeueBlocks()
 
 function unblockNode(node)
 {
-  console.log(node);
   if(!node.block) return;
   
   if(node.x-1 >= 0)
