@@ -1,3 +1,11 @@
+/*
+ * NOTE- This is not the latest version of my A* javascript library.
+ * It works well for one thing traversing one map with meta data 
+ * regarding state of the A* search (which nodes have been checked, etc...).
+ * If you want a significantly more efficient implementation that can handle
+ * multiple traversers (but doesn't have the node meta-data), check out
+ * https://github.com/Phildo/js-astar .
+ */
 var MAX_SCORE = 99999999;
 var AStarGraph = function(identifier, calculateH, calculateGFromNodeToNode)
 {
